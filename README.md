@@ -1,0 +1,2 @@
+# firebase-email-functions
+
