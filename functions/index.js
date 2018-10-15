@@ -8,9 +8,17 @@ const admin = require('firebase-admin');
 
 // Node based Email client
 const nodemailer = require('nodemailer');
-const gmailEmail = encodeURIComponent(functions.config().gmail.email);
-const gmailPassword = encodeURIComponent(functions.config().gmail.password);
-const mailTransport = nodemailer.createTransport(`smtps://${gmailEmail}:${gmailPassword}@smtp.gmail.com`);
+
+const gmailEmail = functions.config().gmail.email;
+const gmailPassword = functions.config().gmail.password;
+
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: gmailEmail,
+        pass: gmailPassword
+    }
+});
 
 // Adds a CORS wrapper to all requests.
 // TODO - Don't allow all origins
@@ -18,7 +26,7 @@ const cors = require('cors');
 const sanitizer = require('sanitize')();
 
 // Initialise the Admin SDK
-admin.initializeApp(functions.config().firebase);
+admin.initializeApp();
 
 const EMAIL_FROM = 'Jana Jurakova Makeup Artist';
 
@@ -64,7 +72,7 @@ const _writeBooking = function(req, res) {
         subject: sanitizer.value(req.body.subject, 'str'),
         message: sanitizer.value(req.body.message, 'str'),
         timestamp: admin.database.ServerValue.TIMESTAMP
-    }
+    };
 
     console.log('Writing booking to database. ' + JSON.stringify(booking));
 
@@ -74,12 +82,8 @@ const _writeBooking = function(req, res) {
     });
 };
 
-exports.notifyOfBooking = functions.database.ref('bookings/{bookingId}').onWrite(event => {
-    if (!event.data.exists()) {
-        return Promise.resolve();
-    }
-    
-    const theData = event.data.val();
+exports.notifyOfBooking = functions.database.ref('bookings/{bookingId}').onWrite((change, context) => {
+    const theData = change.after.val();
     const booking = theData.booking;
 
     const emailWelcome = 'New message from your website';
@@ -89,21 +93,20 @@ exports.notifyOfBooking = functions.database.ref('bookings/{bookingId}').onWrite
     const bookingTelephone = booking.telephone ? 'Telephone: ' + booking.telephone : 'no telephone number';
     const bookingMessage = 'Message: ' + booking.message;
 
-    const emailBody = emailWelcome + '\n\n' + bookingFrom + '\n' + bookingEmail + '\n' + bookingSubject + '\n' + bookingTelephone + '\n\n' + bookingMessage;
+    const emailBody = emailWelcome + '\n' + bookingFrom + '\n' + bookingEmail + '\n' + bookingSubject + '\n' + bookingTelephone + '\n\n' + bookingMessage;
 
     const mailOptions = {
         from: `${EMAIL_FROM} <jana.jurakova.makeup@gmail.com>`,
-       // to: 'jana.jurakova.makeup@gmail.com',
-        to: 'alexbrownx@gmail.com',
+        to: 'jana.jurakova.makeup@gmail.com',
         subject: 'New message from website',
         text: emailBody
     };
 
     console.log('Sending email. ' + JSON.stringify(mailOptions));
 
-    return mailTransport.sendMail(mailOptions).then(() => {
+    return transporter.sendMail(mailOptions).then(() => {
         console.log('Email successfully sent');
-    }).catch(() => {
-        console.error('Email not sent');        
+    }).catch((err) => {
+        console.error('Email not sent: ' + err);
     });
-})
+});
