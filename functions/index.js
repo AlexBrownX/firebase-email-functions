@@ -83,9 +83,16 @@ const _writeBooking = function(req, res) {
 };
 
 exports.notifyOfBooking = functions.database.ref('bookings/{bookingId}').onWrite((change, context) => {
-    const theData = change.after.val();
-    const booking = theData.booking;
+    console.log('Calling notifyOfBooking function with change: ' + JSON.stringify(change));
 
+    const theData = change.after.val();
+
+    if (theData == null) {
+        console.log('Not sending email because no record was received (maybe a deletion occurred).');
+        return change;
+    }
+
+    const booking = theData.booking;
     const emailWelcome = 'New message from your website';
     const bookingFrom = 'Message from: ' + booking.name;
     const bookingEmail = 'Email: ' + booking.email
@@ -98,7 +105,7 @@ exports.notifyOfBooking = functions.database.ref('bookings/{bookingId}').onWrite
     const mailOptions = {
         from: `${EMAIL_FROM} <jana.jurakova.makeup@gmail.com>`,
         to: 'jana.jurakova.makeup@gmail.com',
-        subject: 'New message from website',
+        subject: 'makeupByJana.com - ' + bookingSubject,
         text: emailBody
     };
 
